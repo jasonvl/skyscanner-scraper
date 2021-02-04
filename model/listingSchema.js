@@ -5,18 +5,21 @@ const Schema = mongoose.Schema;
 // Create schema for our flights db.
 // MongoDB doesn't require a schema but it's safer having one.
 const listingSchema = new Schema({
-  airline: String,
-  ticketPrice: String,
-  outboundStartTime: Date,
-  outboundEndTime: Date,
-  outboundDirectFlight: Boolean,
-  outboundTripDuration: String,
-  returnStartTime: Date,
-  returnEndTime: Date,
-  returnDirectFlight: Boolean,
-  returnTripDuration: String,
-  flexibleTicket: Boolean,
   bookingURL: String,
+  flexibleTicket: Boolean,
+  outboundAirline: String,
+  returnAirline: String,
+  ticketPrice: String,
+  outboundDirectFlight: Boolean,
+  outboundDate: String,
+  outboundTripDuration: String,
+  outboundStartTime: String,
+  outboundEndTime: String,
+  returnDirectFlight: Boolean,
+  returnDate: String,
+  returnStartTime: String,
+  returnEndTime: String,
+  returnTripDuration: String,
 });
 
 const Listing = mongoose.model("Listing", listingSchema);

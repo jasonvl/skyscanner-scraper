@@ -18,22 +18,6 @@ let browser;
 
 var app = express();
 
-// Schema for scrapped flight info
-const sampleData = {
-  airline: "Delta",
-  ticketPrice: "$420",
-  outboundStartTime: Date,
-  outboundEndTime: Date,
-  outboundDirectFlight: true,
-  outboundTripDuration: "4h 20min",
-  returnStartTime: Date,
-  returnEndTime: Date,
-  returnDirectFlight: true,
-  returnTripDuration: "4hr 20min",
-  flexibleTicket: true,
-  bookingURL: "https://www.delta.com/...",
-};
-
 async function getRobotsTxt() {
   try {
     const robotsURL = "https://www.skyscanner.com/robots.txt";
@@ -199,68 +183,151 @@ async function completeSearchField(page, flightSearchParams) {
   }
 }
 
-// Ticket listings on Skyscanner consist of images, so we can't scrape data directly.
-// Instead, we'll go through the listing (infinite scrolling page), grab the URLs each listing and
-// save it in an array for later processing.
-async function scrapeListingForUrl(allListingsUrl) {
-  try {
-    const page = await browser.newPage();
-    await page.goto(allListingsUrl, { waitUntil: "networkidle2" });
-    const html = await page.evaluate(() => document.body.innerHTML);
-    // fs.writeFileSync("./listing.html", html); // For testing
-
-    const $ = await cheerio.load(html); // Inject jQuery to easily get content of site more easily compared to using raw js
-
-    // Iterate through flight listings
-    // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
-    const listingAirlineUrl = [];
-    $('a[class*="FlightsTicket_link"]').each((i, element) => {
-      listingAirlineUrl.push(baseUrl + $(element).attr("href"));
-    });
-
-    return listingAirlineUrl;
-  } catch (error) {
-    console.log("Scrape flight url failed.");
-    console.log(error);
-  }
-}
-
-// No longer used since infinite scrolling method is used instead
-async function scrapeListingForUrl(allListingsUrl) {
-  try {
-    const page = await browser.newPage();
-    await page.goto(allListingsUrl, { waitUntil: "networkidle2" });
-    const html = await page.evaluate(() => document.body.innerHTML);
-    // fs.writeFileSync("./listing.html", html); // For testing
-
-    const $ = await cheerio.load(html); // Inject jQuery to easily get content of site more easily compared to using raw js
-
-    // Iterate through flight listings
-    // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
-    const listingAirlineUrl = [];
-    $('a[class*="FlightsTicket_link"]').each((i, element) => {
-      listingAirlineUrl.push(baseUrl + $(element).attr("href"));
-    });
-
-    return listingAirlineUrl;
-  } catch (error) {
-    console.log("Scrape flight url failed.");
-    console.log(error);
-  }
-}
-
-async function scrappedListingInfo(page, listingURLs) {
+// jvl
+async function scrapeListingInfo(page, listingURLs) {
   try {
     // For each listing, visit it's URL
     // Note: We're using old for-loop instead of listings.forEach because forEach does things parallel, which Puppeteer doesn't like
     for (var i = 0; i < listingURLs.length; i++) {
-      await page.goto(listings[i].url);
+      await page.goto(listingURLs[i], { waitUntil: "networkidle2" });
+
       const html = await page.content();
       const $ = await cheerio.load(html);
 
-      // To-do once scrapeListingUrl() works: Scrape relevant info from listing and save to database
-      // const listingModel = new Listing(listings[i]); // Create new listing model
-      // await listingModel.save(); // Save model to Mongodb
+      // If listing is still available - required because listing might be sold out
+      if (
+        $("div[class^='UnavailableItinerary_unavailableContainer']").length ===
+        0
+      ) {
+        // Schema for scrapped flight info
+        // const listingSchema = new Schema({
+        //   bookingURL: String,
+        //   flexibleTicket: Boolean,
+        //   outboundAirline: String,
+        //   returnAirline: String,
+        //   ticketPrice: String,
+        //   outboundDirectFlight: Boolean,
+        //   outboundDate: String,
+        //   outboundTripDuration: String,
+        //   outboundStartTime: String,
+        //   outboundEndTime: String,
+        //   returnDirectFlight: Boolean,
+        //   returnDate: String,
+        //   returnStartTime: String,
+        //   returnEndTime: String,
+        //   returnTripDuration: String,
+        // });
+
+        const bookingURL = listingURLs[i];
+        console.log(bookingURL);
+
+        var flexibleTicket = false;
+        if (
+          $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div.FareFamilies_container__3xfSy > div.FareFamilies_pricesContainer__2HHQR > div > div.PricingItem_providerFeatures__1uhxu > div > span"
+          ).text() == "Flexible ticket"
+        ) {
+          flexibleTicket = true;
+        }
+        listingURLs[i].flexibleTicket = flexibleTicket;
+        console.log(flexibleTicket);
+
+        const outboundAirline = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div.DetailsPanelContent_item__2U8Uo.DetailsPanelContent_left__1ietC > div.DetailsPanelContent_covidContainer__3c8mU > table > tbody > tr:nth-child(1) > th:nth-child(2)"
+        ).text();
+        listingURLs[i].outboundAirline = outboundAirline;
+
+        // If return airline is differnt than outbound airline
+        var returnAirline = outboundAirline;
+        if (
+          $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div.DetailsPanelContent_item__2U8Uo.DetailsPanelContent_left__1ietC > div.DetailsPanelContent_covidContainer__3c8mU > table > tbody > tr:nth-child(1) > th:nth-child(3)"
+          ).length > 0
+        ) {
+          returnAirline = $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div.DetailsPanelContent_item__2U8Uo.DetailsPanelContent_left__1ietC > div.DetailsPanelContent_covidContainer__3c8mU > table > tbody > tr:nth-child(1) > th:nth-child(3)"
+          ).text();
+        }
+        listingURLs[i].returnAirline = returnAirline;
+
+        var ticketPrice = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div.FareFamilies_container__3xfSy > div:nth-child(2) > div > div > div > div.slick-slide.slick-active.slick-current > div > div > div.FareCard_cardFooterConfig__3bLgG > div:nth-child(2) > span > span > span"
+        ).text();
+        // If ticket price is displayed in another format
+        if (ticketPrice == "") {
+          ticketPrice = $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div.DetailsPanelContent_item__2U8Uo.DetailsPanelContent_left__1ietC > div.PricingItem_container__1naeH > div.PricingItem_agentRow__3kCL_ > div.PricingItem_ctaSection__1YlaP > div > div.TotalPrice_totalPriceContainer__3bOWO > span.BpkText_bpk-text__2VouB.BpkText_bpk-text--lg__1PdnC.BpkText_bpk-text--bold__NhE9P"
+          ).text();
+        }
+        listingURLs[i].ticketPrice = ticketPrice;
+
+        var outboundDirectFlight = false;
+        if (
+          $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(1) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_stopsContainer__2Larg > div.LegInfo_stopsLabelContainer__1S6VX > span"
+          ).text() === "Non-stop"
+        ) {
+          outboundDirectFlight = true;
+        }
+        listingURLs[i].outboundDirectFlight = outboundDirectFlight;
+
+        const outboundDate = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(1) > div.LegHeader_container__3jKJM > div > h4.BpkText_bpk-text__2VouB.BpkText_bpk-text--base__3REoZ.LegHeader_legDate__1uPxp"
+        ).text();
+        listingURLs[i].outboundDate = outboundDate;
+
+        const outboundTripDuration = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(1) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_stopsContainer__2Larg > span"
+        ).text();
+        listingURLs[i].outboundTripDuration = outboundTripDuration;
+
+        const outboundStartTime = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(1) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_routePartialDepart__Ix_Rt > span.BpkText_bpk-text__2VouB.BpkText_bpk-text--lg__1PdnC.LegInfo_routePartialTime__ngmkT > div > span"
+        ).text();
+        listingURLs[i].outboundStartTime = outboundStartTime;
+
+        const outboundEndTime = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(1) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_routePartialArrive__1fHVy > span.BpkText_bpk-text__2VouB.BpkText_bpk-text--lg__1PdnC.LegInfo_routePartialTime__ngmkT > div > span"
+        ).text();
+        listingURLs[i].outboundEndTime = outboundEndTime;
+
+        var returnDirectFlight = false;
+        if (
+          $(
+            "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(2) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_stopsContainer__2Larg > div.LegInfo_stopsLabelContainer__1S6VX > span"
+          ).text() == "Non-stop"
+        ) {
+          returnDirectFlight = true;
+        }
+        listingURLs[i].returnDirectFlight = returnDirectFlight;
+
+        const returnDate = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(2) > div.LegHeader_container__3jKJM > div > h4.BpkText_bpk-text__2VouB.BpkText_bpk-text--base__3REoZ.LegHeader_legDate__1uPxp"
+        ).text();
+        listingURLs[i].returnDate = returnDate;
+
+        const returnStartTime = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(2) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_routePartialDepart__Ix_Rt > span.BpkText_bpk-text__2VouB.BpkText_bpk-text--lg__1PdnC.LegInfo_routePartialTime__ngmkT > div > span"
+        ).text();
+        listingURLs[i].returnStartTime = returnStartTime;
+
+        const returnEndTime = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(2) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_routePartialArrive__1fHVy > span.BpkText_bpk-text__2VouB.BpkText_bpk-text--lg__1PdnC.LegInfo_routePartialTime__ngmkT > div > span"
+        ).text();
+        listingURLs[i].returnEndTime = returnEndTime;
+
+        const returnTripDuration = $(
+          "#app-root > div > div.DetailsPanelContent_content__El2wi > div > div:nth-child(2) > button > div.LegSummary_detailsContainer__BAkI8 > div > div.LegInfo_legInfo__2UyXp > div.LegInfo_stopsContainer__2Larg > span"
+        ).text();
+        listingURLs[i].returnTripDuration = returnTripDuration;
+
+        const listingModel = new Listing(listings[i]); // Create new listing model
+        await listingModel.save(); // Save model to Mongodb
+
+        console.log(listingURLs[i]);
+      } else {
+        console.log(`${listingURLs[i]} no longer available`);
+      }
     }
   } catch (error) {
     console.log("Scrape flight data failed.");
@@ -271,6 +338,9 @@ function checkStringInput(string) {
   return !(!string || string == undefined || string == "");
 }
 
+/*
+Helper method used by scrapeListingForUrlInfinteScrollItems() to get the list of listings in the DON.
+*/
 function extractItems() {
   // Get the number of listings in the DOM and turn it into an array
   const extractedItems = Array.from(
@@ -330,6 +400,33 @@ async function scrapeListingForUrlInfinteScrollItems(
   }
 }
 
+// No longer used since infinite scrolling method is used instead
+// Ticket listings on Skyscanner consist of images, so we can't scrape data directly.
+// Instead, we'll go through the listing (infinite scrolling page), grab the URLs each listing and
+// save it in an array for later processing.
+// async function scrapeListingForUrl(allListingsUrl) {
+//   try {
+//     const page = await browser.newPage();
+//     await page.goto(allListingsUrl, { waitUntil: "networkidle2" });
+//     const html = await page.evaluate(() => document.body.innerHTML);
+//     // fs.writeFileSync("./listing.html", html); // For testing
+
+//     const $ = await cheerio.load(html); // Inject jQuery to easily get content of site more easily compared to using raw js
+
+//     // Iterate through flight listings
+//     // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
+//     const listingAirlineUrl = [];
+//     $('a[class*="FlightsTicket_link"]').each((i, element) => {
+//       listingAirlineUrl.push(baseUrl + $(element).attr("href"));
+//     });
+
+//     return listingAirlineUrl;
+//   } catch (error) {
+//     console.log("Scrape flight url failed.");
+//     console.log(error);
+//   }
+// }
+
 async function main() {
   try {
     // const isSiteScrapable = await getRobotsTxt();
@@ -356,19 +453,14 @@ async function main() {
     // await page.click('button[type="submit"]');
     // await page.waitForNavigation({ waitUntil: "networkidle2" }); // Wait until page is finished loading before navigating
 
-    const targetItemCount = 100; // Number of listings to get from infinite scrolling page
+    // const targetItemCount = 100; // Number of listings to get from infinite scrolling page
     // const listingAirlineUrl = await scrapeListingForUrlInfinteScrollItems(page, extractItems, targetItemCount);
 
     const dummyData = [
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311245--31722-1-10081-2103312131?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311404--31825-1-10081-2103312305?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010745--32171-1-10803-2103011335|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010630--32289-1-10803-2103011457|10803-2103311404--31825-1-10081-2103312305?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010905--32171-0-10803-2103011338|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
-      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311225--31722-1-10081-2103312125?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      // "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com/transport/flights/bos/cun/210301/210331/config/10081-2103010800--31722-1-10803-2103011425%7C10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
     ];
-    const scrappedListingInfo = await scrappedListingInfo(page, dummyData);
+    const scrappedListingInfo = await scrapeListingInfo(page, dummyData);
 
     // console.log(scrappedListingInfo);
 
