@@ -18,6 +18,25 @@ let browser;
 
 var app = express();
 
+<<<<<<< HEAD
+=======
+// Schema for scrapped flight info
+const sampleData = {
+  airline: "Delta",
+  ticketPrice: "$420",
+  outboundStartTime: Date,
+  outboundEndTime: Date,
+  outboundDirectFlight: true,
+  outboundTripDuration: "4h 20min",
+  returnStartTime: Date,
+  returnEndTime: Date,
+  returnDirectFlight: true,
+  returnTripDuration: "4hr 20min",
+  flexibleTicket: true,
+  bookingURL: "https://www.delta.com/...",
+};
+
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
 async function getRobotsTxt() {
   try {
     const robotsURL = "https://www.skyscanner.com/robots.txt";
@@ -183,12 +202,67 @@ async function completeSearchField(page, flightSearchParams) {
   }
 }
 
+<<<<<<< HEAD
 // jvl
 async function scrapeListingInfo(page, listingURLs) {
+=======
+// Ticket listings on Skyscanner consist of images, so we can't scrape data directly.
+// Instead, we'll go through the listing (infinite scrolling page), grab the URLs each listing and
+// save it in an array for later processing.
+async function scrapeListingForUrl(allListingsUrl) {
+  try {
+    const page = await browser.newPage();
+    await page.goto(allListingsUrl, { waitUntil: "networkidle2" });
+    const html = await page.evaluate(() => document.body.innerHTML);
+    // fs.writeFileSync("./listing.html", html); // For testing
+
+    const $ = await cheerio.load(html); // Inject jQuery to easily get content of site more easily compared to using raw js
+
+    // Iterate through flight listings
+    // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
+    const listingAirlineUrl = [];
+    $('a[class*="FlightsTicket_link"]').each((i, element) => {
+      listingAirlineUrl.push(baseUrl + $(element).attr("href"));
+    });
+
+    return listingAirlineUrl;
+  } catch (error) {
+    console.log("Scrape flight url failed.");
+    console.log(error);
+  }
+}
+
+// No longer used since infinite scrolling method is used instead
+async function scrapeListingForUrl(allListingsUrl) {
+  try {
+    const page = await browser.newPage();
+    await page.goto(allListingsUrl, { waitUntil: "networkidle2" });
+    const html = await page.evaluate(() => document.body.innerHTML);
+    // fs.writeFileSync("./listing.html", html); // For testing
+
+    const $ = await cheerio.load(html); // Inject jQuery to easily get content of site more easily compared to using raw js
+
+    // Iterate through flight listings
+    // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
+    const listingAirlineUrl = [];
+    $('a[class*="FlightsTicket_link"]').each((i, element) => {
+      listingAirlineUrl.push(baseUrl + $(element).attr("href"));
+    });
+
+    return listingAirlineUrl;
+  } catch (error) {
+    console.log("Scrape flight url failed.");
+    console.log(error);
+  }
+}
+
+async function scrappedListingInfo(page, listingURLs) {
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
   try {
     // For each listing, visit it's URL
     // Note: We're using old for-loop instead of listings.forEach because forEach does things parallel, which Puppeteer doesn't like
     for (var i = 0; i < listingURLs.length; i++) {
+<<<<<<< HEAD
       await page.goto(listingURLs[i], { waitUntil: "networkidle2" });
 
       const html = await page.content();
@@ -328,6 +402,15 @@ async function scrapeListingInfo(page, listingURLs) {
       } else {
         console.log(`${listingURLs[i]} no longer available`);
       }
+=======
+      await page.goto(listings[i].url);
+      const html = await page.content();
+      const $ = await cheerio.load(html);
+
+      // To-do once scrapeListingUrl() works: Scrape relevant info from listing and save to database
+      // const listingModel = new Listing(listings[i]); // Create new listing model
+      // await listingModel.save(); // Save model to Mongodb
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
     }
   } catch (error) {
     console.log("Scrape flight data failed.");
@@ -338,9 +421,12 @@ function checkStringInput(string) {
   return !(!string || string == undefined || string == "");
 }
 
+<<<<<<< HEAD
 /*
 Helper method used by scrapeListingForUrlInfinteScrollItems() to get the list of listings in the DON.
 */
+=======
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
 function extractItems() {
   // Get the number of listings in the DOM and turn it into an array
   const extractedItems = Array.from(
@@ -400,6 +486,7 @@ async function scrapeListingForUrlInfinteScrollItems(
   }
 }
 
+<<<<<<< HEAD
 // No longer used since infinite scrolling method is used instead
 // Ticket listings on Skyscanner consist of images, so we can't scrape data directly.
 // Instead, we'll go through the listing (infinite scrolling page), grab the URLs each listing and
@@ -427,6 +514,8 @@ async function scrapeListingForUrlInfinteScrollItems(
 //   }
 // }
 
+=======
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
 async function main() {
   try {
     // const isSiteScrapable = await getRobotsTxt();
@@ -453,6 +542,7 @@ async function main() {
     // await page.click('button[type="submit"]');
     // await page.waitForNavigation({ waitUntil: "networkidle2" }); // Wait until page is finished loading before navigating
 
+<<<<<<< HEAD
     // const targetItemCount = 100; // Number of listings to get from infinite scrolling page
     // const listingAirlineUrl = await scrapeListingForUrlInfinteScrollItems(page, extractItems, targetItemCount);
 
@@ -461,6 +551,21 @@ async function main() {
       "https://www.skyscanner.com/transport/flights/bos/cun/210301/210331/config/10081-2103010800--31722-1-10803-2103011425%7C10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
     ];
     const scrappedListingInfo = await scrapeListingInfo(page, dummyData);
+=======
+    const targetItemCount = 100; // Number of listings to get from infinite scrolling page
+    // const listingAirlineUrl = await scrapeListingForUrlInfinteScrollItems(page, extractItems, targetItemCount);
+
+    const dummyData = [
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311245--31722-1-10081-2103312131?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311404--31825-1-10081-2103312305?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010745--32171-1-10803-2103011335|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010630--32289-1-10803-2103011457|10803-2103311404--31825-1-10081-2103312305?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010905--32171-0-10803-2103011338|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+      "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311225--31722-1-10081-2103312125?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+    ];
+    const scrappedListingInfo = await scrappedListingInfo(page, dummyData);
+>>>>>>> 9c96262bd08950e92daa3d5dd93d88d675614d91
 
     // console.log(scrappedListingInfo);
 
