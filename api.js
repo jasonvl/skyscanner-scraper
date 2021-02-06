@@ -1,7 +1,6 @@
 const express = require("express");
 const app = express();
 const port = 4000;
-
 const index = require("./index");
 
 // Used by Heroku to scape Skyscanner as defined by chron job interval
