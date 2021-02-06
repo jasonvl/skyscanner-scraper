@@ -1,4 +1,5 @@
+// For GCP deployment but Heroku is used instead, so no longer needed.
 cron:
   - description: "flight scraping every 10 minutes"
-    url: /
+    url: /scrapeSkyscanner
     schedule: every 10 mins
