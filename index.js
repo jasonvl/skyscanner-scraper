@@ -6,30 +6,38 @@ const mongoose = require("mongoose"); // Driver to connect to MongoDB
 const fs = require("fs");
 var express = require("express");
 
+const baseUrl = "https://www.skyscanner.com/";
+const testUrl = "";
 const credentials = require("./credentials/credentials");
 const flightSearchParams = require("./searchFieldParams");
-const Listing = require("./model/ListingSchema"); // Import our schema
-const baseUrl = "https://www.skyscanner.com/";
-const testUrl =
-  "https://www.skyscanner.com/transport/flights/bos/cun/210301/210331/?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1";
-const mongoDbUrl = require("./config/mongoConfig"); // MongoDB connection URL
+const Listing = require("./model/ListingSchema");
+const mongoDbUrl = require("./config/mongoConfig");
 
 let browser;
 
 var app = express();
 
+/*
+Is scrapping allowed on site?
+*/
 async function getRobotsTxt() {
   try {
     const robotsURL = "https://www.skyscanner.com/robots.txt";
-    const robotTxtRules = await request.get(robotsURL); // Make req to GET robots text file
-    const robots = robotsParser(robotsURL, robotTxtRules); // Pass URL and ruleset to parser
+    const robotTxtRules = await request.get(robotsURL);
+    const robots = robotsParser(robotsURL, robotTxtRules);
 
-    if (!robots.isAllowed(baseUrl, "myBot")) {
+    if (
+      !robots.isAllowed(
+        "https://www.skyscanner.com/transport/flights/",
+        "myBot"
+      )
+    ) {
       return false;
     }
 
     return true;
   } catch (error) {
+    console.log("Robots parser failed.");
     console.log(error);
   }
 }
@@ -46,25 +54,25 @@ async function connectToMongoDB() {
     });
     const connection = mongoose.connection;
     connection.once("open", () => {
-      console.log("MongoDB database connection established successfully");
+      console.log("MongoDB database connection established successfully.");
     });
   } catch (error) {
-    console.log("Connecting to MongoDB failed");
+    console.log("Connecting to MongoDB failed.");
     console.log(error);
   }
 }
 
 /*
-Sign in to SkyScrapper.
+Sign in to SkyScrapper. 
 Note: Not working because of CAPTCHA. 
 */
 async function signIn(page, email, password) {
   try {
-    await page.click("#login-button-nav-item button"); // Click on login button
+    await page.click("#login-button-nav-item button");
     await page.waitFor(1000);
-    await page.click('[data-testid="login-email-button"]'); // Click on email option
+    await page.click('[data-testid="login-email-button"]');
     await page.waitFor(1000);
-    await page.type(".js-accountDetectionEmailInput", email);
+    await page.type(".js-accountDetectionEmailInput", email); // Enter email address
     await page.click(".js-progressionButton");
   } catch (error) {
     console.log("Login failed.");
@@ -77,7 +85,6 @@ Helper function to choose a departure and return date from the calendar to popul
 */
 async function pickCalendarDate(page, option, day, month, year) {
   try {
-    // await page.click('[class*="FlightDatepicker"] li:nth-of-type(1) button'); // Make sure "Specific Date" option is choosen
     if (option === "depart") {
       await page.click("#depart-calendar__bpk_calendar_nav_select");
     }
@@ -91,12 +98,8 @@ async function pickCalendarDate(page, option, day, month, year) {
 
     // Select MM YYYY from drop-down
     await page.select('select[name="months"]', `${year}-${month}`); // Note: Value is of format YYYY-MM
-    // await page.select(
-    //   "#depart-calendar__bpk_calendar_nav_select",
-    //   `${year}-${month}`
-    // ); // Note: Value is of format YYYY-MM
 
-    // Iterate through list of days in calander and select the day we want
+    // Iterate through list of days in calander and select chosen day
     await page.evaluate((day) => {
       document
         .querySelectorAll(
@@ -202,7 +205,7 @@ async function scrapeListingInfo(page, listingURLs) {
     const scrappedListingData = []; // Array to store scrapped listing result objs
 
     // For each listing, visit it's URL
-    // Note: We're using old for-loop instead of listings.forEach because forEach does things parallel, which Puppeteer doesn't like
+    // Note: Using for-loop instead of listings.forEach because forEach does things in parallel, which Puppeteer doesn't like
     for (var i = 0; i < listingURLs.length; i++) {
       await page.goto(listingURLs[i], { waitUntil: "networkidle2" });
 
@@ -337,8 +340,8 @@ async function scrapeListingInfo(page, listingURLs) {
         ).text();
         scrappedListingDataObj.returnTripDuration = returnTripDuration;
 
-        scrappedListingData[i] = scrappedListingDataObj; // Add obj to array
-        console.log(scrappedListingData[i]);
+        scrappedListingData.push(scrappedListingDataObj); // Add obj to array
+        // console.log(scrappedListingData[i]);
 
         const listingModel = new Listing(scrappedListingData[i]); // Create new listing model
         await listingModel.save(); // Save model to Mongodb
@@ -346,12 +349,17 @@ async function scrapeListingInfo(page, listingURLs) {
         console.log(`${listingURLs[i]} no longer available`);
       }
     }
+
+    return scrappedListingData;
   } catch (error) {
     console.log("Scrape flight data failed.");
     console.log(error);
   }
 }
 
+/*
+Helper method used to check if an input string isn't null, empty, or undefined.
+*/
 function checkStringInput(string) {
   return !(!string || string == undefined || string == "");
 }
@@ -360,10 +368,9 @@ function checkStringInput(string) {
 Helper method used by scrapeListingForUrlInfinteScrollItems() to get the list of listings in the DON.
 */
 function extractItems() {
-  // Get the number of listings in the DOM and turn it into an array
   const extractedItems = Array.from(
     document.querySelectorAll("div[class^='FlightsResults_dayViewItems'] > div")
-  );
+  ); // Get the number of listings in the DOM and turn it into an array
 
   const items = extractedItems.map((element) => element.innerText); // Convert extracted items into array
   return items;
@@ -384,20 +391,18 @@ async function scrapeListingForUrlInfinteScrollItems(
   try {
     let previousHeight;
 
-    // await page.goto(testUrl, { waitUntil: "networkidle2" });
     const html = await page.evaluate(() => document.body.innerHTML);
     const $ = await cheerio.load(html);
 
     await page.click(
       "#app-root > div[class^='FlightsDayView_row']> div > div[class^='FlightsDayView_container'] > div[class^='FlightsDayView_results'] > div:nth-child(1) > button"
-      // "#app-root > div.FlightsDayView_row__BBHEB > div > div.FlightsDayView_container__J_bpI > div.FlightsDayView_results__Z05FF > div:nth-child(1) > button"
     ); // Click "Show more result button" to start infinite scrolling
 
     const listingAirlineUrl = [];
 
-    // Infinite scrolling algo: Check how many listings are in the DON, and if it's below our targetItemCount, we tell the browser to keep scorlling until the listings count is equal to the target value.
+    // Infinite scrolling algo: Check how many listings are in DON, and if it's below targetItemCount, tell browser to keep scorlling until listings count is equal to targetItemCount.
     while (items.length < targetItemCount) {
-      // Iterate through flight listings, and for each listing, save the airline booking site URL
+      // Iterate through flight listings, and for each listing, save airline booking site URL
       // Note: Using regex to match class containing "FlightsTicket_link" to get listing since actual class name contains nonsense string appended to end.
       $('a[class*="FlightsTicket_link"]').each((i, element) => {
         listingAirlineUrl.push(baseUrl + $(element).attr("href"));
@@ -406,7 +411,9 @@ async function scrapeListingForUrlInfinteScrollItems(
       items = await page.evaluate(extractedItems); // Get an update of listings in DON
 
       previousHeight = await page.evaluate("document.body.scrollHeight");
-      await page.evaluate("window.scrollTo(0, document.body.scrollHeight)"); // Function that runs inside brower that'll scroll to bottom of page
+      await page.evaluate(
+        "window.scrollTo(0, document.body.scrollHeight - 100)"
+      ); // Function that runs inside brower that'll scroll to bottom of page
       await page.waitForFunction(
         `document.body.scrollHeight > ${previousHeight}`
       ); // Check if we exucuted above function
@@ -415,6 +422,7 @@ async function scrapeListingForUrlInfinteScrollItems(
 
     return listingAirlineUrl;
   } catch (error) {
+    console.log("Scrape flight URL failed.");
     console.log(error);
   }
 }
@@ -448,16 +456,16 @@ async function scrapeListingForUrlInfinteScrollItems(
 
 async function main() {
   try {
-    // const isSiteScrapable = await getRobotsTxt();
-    // console.log(
-    //   `Is ${baseUrl} legally able to be scrapped? ${isSiteScrapable}`
-    // );
+    const isSiteScrapable = await getRobotsTxt();
+    console.log(
+      `Is ${baseUrl} legally able to be scrapped? ${isSiteScrapable}`
+    );
 
     await connectToMongoDB();
 
     browser = await puppeteer.launch({ headless: false }); // Note: Headless means browser will be hidden when app launches
     const page = await browser.newPage();
-    page.setViewport({ width: 1680, height: 891 });
+    page.setViewport({ width: 1680, height: 1050 }); // Correct screen resolution needed else infinite scrolling won't work in scrapeListingForUrlInfinteScrollItems()
     await page.setDefaultNavigationTimeout(0);
     await page.goto(baseUrl); // Visit URL
 
@@ -470,7 +478,7 @@ async function main() {
 
     await completeSearchField(page, flightSearchParams);
     await page.click('button[type="submit"]');
-    await page.waitForNavigation({ waitUntil: "networkidle2" }); // Wait until page is finished loading before navigating
+    await page.waitFor(2000); // Using this because page.waitForNavigation({ waitUntil: "networkidle2" }) not working
 
     const targetItemCount = 28; // Number of listings to get from infinite scrolling page
     const listingAirlineUrl = await scrapeListingForUrlInfinteScrollItems(
@@ -479,42 +487,29 @@ async function main() {
       targetItemCount
     );
 
-    // console.log(listingAirlineUrl);
-
     // const dummyData = [
-    //   // "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
+    //   "https://www.skyscanner.com//transport/flights/bos/cun/210301/210331/config/10081-2103010815--32733-0-10803-2103011250|10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
     //   "https://www.skyscanner.com/transport/flights/bos/cun/210301/210331/config/10081-2103010800--31722-1-10803-2103011425%7C10803-2103311512--32171-0-10081-2103312025?adults=1&adultsv2=1&cabinclass=economy&children=0&childrenv2=&destinationentityid=27540602&inboundaltsenabled=false&infants=0&originentityid=27539525&outboundaltsenabled=false&preferdirects=false&preferflexible=false&ref=home&rtn=1",
     // ];
 
-    const scrappedListingDataObj = await scrapeListingInfo(
+    await page.waitFor(2000);
+
+    var scrappedListingDataObj = await scrapeListingInfo(
       page,
       listingAirlineUrl
     );
 
-    // browser.close();
+    await page.waitFor(2000);
 
-    // mongoose.disconnect(); // Close db connection
-    // console.log("disconnected from mongodb!");
+    browser.close();
+    mongoose.disconnect(); // Close db connection
+    console.log("disconnected from mongodb!");
+
+    return scrappedListingDataObj;
   } catch (error) {
     console.log(error);
   }
 }
 
-main();
-
-// Used by Heroku to scape Skyscanner as defined by chron job interval
-// app.get("/scrapeSkyscanner", async (req, res, next) => {
-//   try {
-//     res.setHeader("Content-Type", "application/json"); // Set to JSON else res will be text/html by default, which makes viewing the response messy
-//     const scrappedListingInfo = main();
-
-//     res.send(scrappedListingInfo);
-//   } catch (error) {
-//     console.log("GET error");
-//     console.log(error);
-//   }
-// });
-
-// app.listen(4000, () => {
-//   console.log("Server running on port 4000");
-// });
+// main();
+module.exports = { main }; // Export for use in API file
